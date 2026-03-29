@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cash Count Tool</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+
+<style>
+:root{
+--primary:#2563eb;
+--bg:#f1f5f9;
+--card:#ffffff;
+--text:#0f172a;
+--muted:#64748b;
+--border:#e2e8f0;
+}
+
+body.dark{
+--bg:#0f172a;
+--card:#1e293b;
+--text:#f1f5f9;
+--muted:#94a3b8;
+--border:#334155;
+--primary:#3b82f6;
+}
+
+*{box-sizing:border-box}
+body{
+font-family:'Inter',sans-serif;
+margin:0;
+background:var(--bg);
+color:var(--text);
+}
+
+.container{
+max-width:500px;
+margin:auto;
+padding:10px;
+}
+
+.header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+font-size:18px;
+font-weight:700;
+margin-bottom:10px;
+}
+
+.toggle{
+cursor:pointer;
+font-size:14px;
+padding:6px 10px;
+border-radius:8px;
+border:1px solid var(--border);
+}
+
+.card{
+padding-bottom:20px; /* FIX: extra space so total not hidden */
+background:var(--card);
+border-radius:14px;
+padding:12px;
+margin-bottom:12px;
+box-shadow:0 3px 10px rgba(0,0,0,0.08);
+}
+
+.table-container{
+overflow-x:auto;
+border-radius:10px;
+border:1px solid var(--border);
+}
+
+.table{
+width:100%;
+border-collapse:collapse;
+min-width:100%; /* FIX: remove forced wide table */
+}
+
+.table th{
+background:var(--bg);
+font-size:12px;
+padding:8px;
+}
+
+.table td{
+padding:8px;
+border-top:1px solid var(--border);
+}
+
+input{
+width:100%;
+padding:6px; /* reduced */
+border-radius:6px;
+border:1px solid var(--border);
+text-align:center;
+font-weight:600;
+font-size:13px; /* reduced */
+background:transparent;
+color:var(--text);
+height:32px; /* tighter height */
+}
+
+.total-box{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-top:10px;
+padding:10px;
+border-radius:10px;
+background:rgba(59,130,246,0.1);
+font-weight:700;
+font-size:16px;
+position:sticky;
+bottom:10px; /* FIX: lift above screen edge */
+z-index:5;
+}
+
+
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:10px;
+background:var(--primary);
+color:#fff;
+font-weight:600;
+font-size:15px;
+cursor:pointer;
+}
+
+.history-item{
+padding:10px;
+border-bottom:1px solid var(--border);
+}
+
+.date{font-size:11px;color:var(--muted)}
+.remark{font-weight:600;margin:4px 0}
+.breakdown{font-size:12px;margin:6px 0;line-height:1.4}
+.total{font-weight:700;color:var(--primary)}
+
+.delete-btn{
+margin-top:6px;
+background:#ef4444;
+}
+
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<div class="header">
+<span>💰 Cash Tool</span>
+<div class="toggle" onclick="toggleDark()">🌙</div>
+</div>
+
+<div class="card">
+
+<div class="table-container">
+<table class="table" id="cashTable">
+<tr><th style="width:30%">Denom</th><th style="width:40%">Qty</th><th style="width:30%">Total</th></tr>
+</table>
+</div>
+
+<div class="total-box">
+<span>Total</span>
+<span>₱<span id="grandTotal">0.00</span></span>
+</div>
+
+<br>
+<input type="text" id="remarks" placeholder="Remarks">
+<br><br>
+<button onclick="saveEntry()">Save</button>
+
+</div>
+
+<div class="card">
+<h4 style="margin:0 0 8px">History</h4>
+<div id="history"></div>
+</div>
+
+</div>
+
+<script>
+const denominations=[1000,500,200,100,50,20,10,5,1,0.5,0.25]
+
+function init(){
+let table=document.getElementById("cashTable")
+denominations.forEach((d,i)=>{
+let row=document.createElement("tr")
+row.innerHTML=`
+<td><b>${d}</b></td>
+<td><input type="number" min="0" value="0" oninput="compute()" onfocus="selectAll(this)" id="qty_${i}"></td>
+<td id="total_${i}" style="font-size:12px">0.00</td>`
+table.appendChild(row)
+})
+loadHistory()
+loadTheme()
+}
+
+function compute(){
+let grand=0
+
+denominations.forEach((d,i)=>{
+let qty=parseFloat(document.getElementById(`qty_${i}`).value)||0
+let total=qty*d
+
+document.getElementById(`total_${i}`).innerText=total.toLocaleString(undefined,{minimumFractionDigits:2})
+
+grand+=total
+})
+
+document.getElementById("grandTotal").innerText=grand.toLocaleString(undefined,{minimumFractionDigits:2})
+}
+
+function saveEntry(){
+let remarks=document.getElementById("remarks").value.trim()
+
+if(!remarks){
+alert("Remarks is required")
+document.getElementById("remarks").focus()
+return
+}
+
+
+// remarks already validated above
+let grand=0
+let breakdown=[]
+
+denominations.forEach((d,i)=>{
+let qty=parseFloat(document.getElementById(`qty_${i}`).value)||0
+if(qty>0){
+let total=qty*d
+
+grand+=total
+
+breakdown.push(`₱${d} x ${qty} = ${total.toLocaleString(undefined,{minimumFractionDigits:2})}`)
+}
+})
+
+let entry={
+date:new Date().toLocaleString(),
+remarks:remarks,
+breakdown:breakdown,
+total:grand
+}
+
+let history=JSON.parse(localStorage.getItem("cash_history")||"[]")
+history.unshift(entry)
+localStorage.setItem("cash_history",JSON.stringify(history))
+
+resetInputs()
+loadHistory()
+}
+
+function resetInputs(){
+denominations.forEach((d,i)=>{
+document.getElementById(`qty_${i}`).value=0
+})
+document.getElementById("remarks").value=""
+compute()
+}
+
+function loadHistory(){
+let history=JSON.parse(localStorage.getItem("cash_history")||"[]")
+let container=document.getElementById("history")
+container.innerHTML=""
+
+history.forEach((h,i)=>{
+let div=document.createElement("div")
+div.className="history-item"
+
+div.innerHTML=`
+<div class="date">${h.date}</div>
+<div class="remark">${h.remarks}</div>
+<div class="breakdown">${h.breakdown.join("<br>")}</div>
+<div class="total">₱${h.total.toLocaleString(undefined,{minimumFractionDigits:2})}</div>
+<button class="delete-btn" onclick="deleteEntry(${i})">Delete</button>
+`
+
+container.appendChild(div)
+})
+}
+
+function deleteEntry(index){
+let history=JSON.parse(localStorage.getItem("cash_history")||"[]")
+history.splice(index,1)
+localStorage.setItem("cash_history",JSON.stringify(history))
+loadHistory()
+}
+
+function toggleDark(){
+document.body.classList.toggle("dark")
+localStorage.setItem("theme",document.body.classList.contains("dark")?"dark":"light")
+}
+
+function loadTheme(){
+let theme=localStorage.getItem("theme")
+if(theme==="dark") document.body.classList.add("dark")
+}
+
+init()
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./service-worker.js")
+}
+
+function selectAll(el){
+setTimeout(()=>{
+el.select()
+},0)
+}
+
+</script>
+
+</body>
+</html>
